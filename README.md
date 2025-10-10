@@ -6,12 +6,25 @@ A 32-bit x96dbg plugin that exposes a lightweight JSON-RPC "Model Context Protoc
 
 - Starts an MCP server automatically when the plugin loads (default `0.0.0.0:51337`).
 - JSON-RPC endpoints:
-  - `readMemory` – read up to 4096 bytes from the target.
-  - `listModules` – enumerate loaded modules with base, size, and path metadata.
-  - `setBreakpoint` – add a software breakpoint through the debugger command API.
-  - `getRegisters` – snapshot general-purpose registers and flags.
-  - `runTrace` – trigger `traceinto`/`traceover` executions with an optional step count.
-  - `ping` – lightweight health check.
+  - Memory & modules:
+    - `readMemory` – read up to 4096 bytes from the target.
+    - `listModules` – enumerate loaded modules (base, size, path, sections).
+    - `getExports` / `getImports` – inspect module export/import tables.
+    - `getDisassembly` – disassemble instructions at any address.
+  - Page & runtime diagnostics:
+    - `getPageRights` / `setPageRights` – inspect or mutate page protection.
+    - `memIsCodePage` – identify executable regions.
+    - `getTraceRecord` – pull coverage metadata for a page.
+    - `memBpSize` – report hardware breakpoint granularity at an address.
+    - `getThreads` – enumerate debugger threads with CIP, TLS, timing, and wait state info.
+  - Breakpoint management:
+    - `setBreakpoint` / `enableBreakpoint` / `disableBreakpoint` – manage software breakpoints.
+    - `deleteBreakpoint` – remove software or hardware breakpoints.
+    - `listBreakpoints` – enumerate all debugger breakpoints including hit counts and conditions.
+  - Execution & state:
+    - `getRegisters` – snapshot general-purpose, segment, and debug registers plus flags.
+    - `runTrace` – trigger `traceinto`/`traceover` executions with an optional step count.
+    - `ping` – lightweight health check.
 - Runtime commands inside x96dbg:
   - `mcp.status` – print the current server state.
   - `mcp.restart` – restart the server without reloading the plugin.
