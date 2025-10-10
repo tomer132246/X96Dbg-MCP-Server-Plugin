@@ -4,15 +4,15 @@ A 32-bit x96dbg plugin that exposes a lightweight JSON-RPC "Model Context Protoc
 
 ## Features
 
-- 🚀 Starts an MCP server automatically when the plugin loads (default `0.0.0.0:51337`).
-- 📦 JSON-RPC endpoints:
+- Starts an MCP server automatically when the plugin loads (default `0.0.0.0:51337`).
+- JSON-RPC endpoints:
   - `readMemory` – read up to 4096 bytes from the target.
   - `listModules` – enumerate loaded modules with base, size, and path metadata.
   - `setBreakpoint` – add a software breakpoint through the debugger command API.
   - `getRegisters` – snapshot general-purpose registers and flags.
   - `runTrace` – trigger `traceinto`/`traceover` executions with an optional step count.
   - `ping` – lightweight health check.
-- 🔁 Runtime commands inside x96dbg:
+- Runtime commands inside x96dbg:
   - `mcp.status` – print the current server state.
   - `mcp.restart` – restart the server without reloading the plugin.
   - `mcp.port <port>` – persist a new TCP port (saved to the `MCP` setting bucket).
