@@ -1803,54 +1803,151 @@ json McpServer::handleGetRegisters(const json&)
 
     const auto& regs = regDump.regcontext;
 
-    json general = json::object();
-    json generalList = json::array();
-    json segments = json::object();
-    json segmentList = json::array();
-    json debugRegs = json::object();
-    json debugList = json::array();
+    constexpr bool kIs64Bit = sizeof(duint) == 8;
+    const int pointerBits = static_cast<int>(sizeof(duint) * 8);
 
-    auto addRegister = [&](json& table, json& list, const char* name, duint value)
+    auto formatRegisterValue = [&](duint value, int bits) -> std::pair<std::string, unsigned long long>
     {
-        const std::string hex = formatAddress(value);
-        table[name] = hex;
-        list.push_back({
-            {"name", name},
-            {"hex", hex},
-            {"dec", static_cast<unsigned long long>(value)}
-        });
+        if(bits <= 0)
+            bits = pointerBits;
+
+        unsigned long long maskedValue = 0;
+        if(bits >= 64)
+        {
+            maskedValue = static_cast<unsigned long long>(value);
+        }
+        else
+        {
+            const unsigned long long mask = (1ull << bits) - 1ull;
+            maskedValue = static_cast<unsigned long long>(value) & mask;
+        }
+
+        std::ostringstream ss;
+        ss << "0x" << std::hex << std::uppercase << std::setw((bits + 3) / 4) << std::setfill('0') << maskedValue;
+        return {ss.str(), maskedValue};
     };
 
-    addRegister(general, generalList, "eax", static_cast<duint>(regs.cax));
-    addRegister(general, generalList, "ebx", static_cast<duint>(regs.cbx));
-    addRegister(general, generalList, "ecx", static_cast<duint>(regs.ccx));
-    addRegister(general, generalList, "edx", static_cast<duint>(regs.cdx));
-    addRegister(general, generalList, "esi", static_cast<duint>(regs.csi));
-    addRegister(general, generalList, "edi", static_cast<duint>(regs.cdi));
-    addRegister(general, generalList, "ebp", static_cast<duint>(regs.cbp));
-    addRegister(general, generalList, "esp", static_cast<duint>(regs.csp));
-    addRegister(general, generalList, "eip", static_cast<duint>(regs.cip));
+    auto appendRegister = [&](json& table, json& list, const char* name, duint value, int bits, const char* aliasOf)
+    {
+        const auto formatted = formatRegisterValue(value, bits);
+        table[name] = formatted.first;
 
-    addRegister(debugRegs, debugList, "dr0", static_cast<duint>(regs.dr0));
-    addRegister(debugRegs, debugList, "dr1", static_cast<duint>(regs.dr1));
-    addRegister(debugRegs, debugList, "dr2", static_cast<duint>(regs.dr2));
-    addRegister(debugRegs, debugList, "dr3", static_cast<duint>(regs.dr3));
-    addRegister(debugRegs, debugList, "dr6", static_cast<duint>(regs.dr6));
-    addRegister(debugRegs, debugList, "dr7", static_cast<duint>(regs.dr7));
+        json entry = {
+            {"name", name},
+            {"hex", formatted.first},
+            {"dec", formatted.second},
+            {"bits", bits}
+        };
 
-    segments["cs"] = regs.cs;
-    segments["ds"] = regs.ds;
-    segments["es"] = regs.es;
-    segments["fs"] = regs.fs;
-    segments["gs"] = regs.gs;
-    segments["ss"] = regs.ss;
+        if(aliasOf && *aliasOf)
+            entry["aliasOf"] = aliasOf;
 
-    segmentList.push_back({{"name", "cs"}, {"value", regs.cs}});
-    segmentList.push_back({{"name", "ds"}, {"value", regs.ds}});
-    segmentList.push_back({{"name", "es"}, {"value", regs.es}});
-    segmentList.push_back({{"name", "fs"}, {"value", regs.fs}});
-    segmentList.push_back({{"name", "gs"}, {"value", regs.gs}});
-    segmentList.push_back({{"name", "ss"}, {"value", regs.ss}});
+        list.push_back(std::move(entry));
+    };
+
+    json general = json::object();
+    json generalList = json::array();
+
+#ifdef _WIN64
+    const std::array<std::pair<const char*, duint>, 9> primaryRegisters = {{
+        {"rax", regs.cax},
+        {"rbx", regs.cbx},
+        {"rcx", regs.ccx},
+        {"rdx", regs.cdx},
+        {"rsi", regs.csi},
+        {"rdi", regs.cdi},
+        {"rbp", regs.cbp},
+        {"rsp", regs.csp},
+        {"rip", regs.cip}
+    }};
+
+    for(const auto& reg : primaryRegisters)
+        appendRegister(general, generalList, reg.first, reg.second, 64, nullptr);
+
+    const std::array<std::pair<const char*, duint>, 8> extendedRegisters = {{
+        {"r8", regs.r8},
+        {"r9", regs.r9},
+        {"r10", regs.r10},
+        {"r11", regs.r11},
+        {"r12", regs.r12},
+        {"r13", regs.r13},
+        {"r14", regs.r14},
+        {"r15", regs.r15}
+    }};
+
+    for(const auto& reg : extendedRegisters)
+        appendRegister(general, generalList, reg.first, reg.second, 64, nullptr);
+
+    struct LegacyRegister
+    {
+        const char* name;
+        duint value;
+        const char* aliasOf;
+    };
+
+    const std::array<LegacyRegister, 9> legacyRegisters = {{
+        {"eax", regs.cax, "rax"},
+        {"ebx", regs.cbx, "rbx"},
+        {"ecx", regs.ccx, "rcx"},
+        {"edx", regs.cdx, "rdx"},
+        {"esi", regs.csi, "rsi"},
+        {"edi", regs.cdi, "rdi"},
+        {"ebp", regs.cbp, "rbp"},
+        {"esp", regs.csp, "rsp"},
+        {"eip", regs.cip, "rip"}
+    }};
+
+    for(const auto& reg : legacyRegisters)
+        appendRegister(general, generalList, reg.name, reg.value, 32, reg.aliasOf);
+#else
+    const std::array<std::pair<const char*, duint>, 9> primaryRegisters = {{
+        {"eax", regs.cax},
+        {"ebx", regs.cbx},
+        {"ecx", regs.ccx},
+        {"edx", regs.cdx},
+        {"esi", regs.csi},
+        {"edi", regs.cdi},
+        {"ebp", regs.cbp},
+        {"esp", regs.csp},
+        {"eip", regs.cip}
+    }};
+
+    for(const auto& reg : primaryRegisters)
+        appendRegister(general, generalList, reg.first, reg.second, 32, nullptr);
+#endif
+
+    json debugRegs = json::object();
+    json debugList = json::array();
+    const std::array<std::pair<const char*, duint>, 6> debugEntries = {{
+        {"dr0", regs.dr0},
+        {"dr1", regs.dr1},
+        {"dr2", regs.dr2},
+        {"dr3", regs.dr3},
+        {"dr6", regs.dr6},
+        {"dr7", regs.dr7}
+    }};
+
+    for(const auto& reg : debugEntries)
+        appendRegister(debugRegs, debugList, reg.first, reg.second, pointerBits, nullptr);
+
+    json segments = json::object();
+    json segmentList = json::array();
+    auto appendSegment = [&](const char* name, unsigned short value)
+    {
+        segments[name] = value;
+        segmentList.push_back(json::object({
+            {"name", name},
+            {"value", value},
+            {"bits", 16}
+        }));
+    };
+
+    appendSegment("cs", regs.cs);
+    appendSegment("ds", regs.ds);
+    appendSegment("es", regs.es);
+    appendSegment("fs", regs.fs);
+    appendSegment("gs", regs.gs);
+    appendSegment("ss", regs.ss);
 
     json flags = {
         {"cf", regDump.flags.c},
@@ -1876,27 +1973,44 @@ json McpServer::handleGetRegisters(const json&)
         json::object({{"name", "OF"}, {"value", regDump.flags.o}})
     });
 
-    duint stackValue = static_cast<duint>(regs.csp);
-    duint instrValue = static_cast<duint>(regs.cip);
-
+    const auto stackFormatted = formatRegisterValue(regs.csp, pointerBits);
     json stackPointer = {
-        {"name", "esp"},
-        {"hex", formatAddress(stackValue)},
-        {"dec", static_cast<unsigned long long>(stackValue)}
+        {"name", kIs64Bit ? "rsp" : "esp"},
+        {"hex", stackFormatted.first},
+        {"dec", stackFormatted.second},
+        {"bits", pointerBits}
     };
+#ifdef _WIN64
+    stackPointer["aliasOf"] = "esp";
+#endif
 
+    const auto ipFormatted = formatRegisterValue(regs.cip, pointerBits);
     json instructionPointer = {
-        {"name", "eip"},
-        {"hex", formatAddress(instrValue)},
-        {"dec", static_cast<unsigned long long>(instrValue)}
+        {"name", kIs64Bit ? "rip" : "eip"},
+        {"hex", ipFormatted.first},
+        {"dec", ipFormatted.second},
+        {"bits", pointerBits}
     };
+#ifdef _WIN64
+    instructionPointer["aliasOf"] = "eip";
+#endif
+
+    const auto flagsFormatted = formatRegisterValue(regs.eflags, pointerBits);
+    const char* flagsFieldName = kIs64Bit ? "rflags" : "eflags";
 
     LogInfo("getRegisters returned register snapshot");
 
-    return json::object({
+    json architecture = json::object({
+        {"bits", pointerBits},
+        {"pointerBytes", static_cast<int>(sizeof(duint))},
+        {"flavor", MCP_TARGET_ARCH_STRING},
+        {"is64Bit", kIs64Bit}
+    });
+
+    json result = json::object({
         {"general", general},
         {"flags", flags},
-        {"eflags", formatAddress(static_cast<duint>(regs.eflags))},
+        {flagsFieldName, flagsFormatted.first},
         {"registers", generalList},
         {"debugRegisters", debugList},
         {"debug", debugRegs},
@@ -1904,8 +2018,15 @@ json McpServer::handleGetRegisters(const json&)
         {"segmentList", segmentList},
         {"flagList", flagList},
         {"stackPointer", stackPointer},
-        {"instructionPointer", instructionPointer}
+        {"instructionPointer", instructionPointer},
+        {"architecture", architecture}
     });
+
+#ifdef _WIN64
+    result["eflags"] = flagsFormatted.first;
+#endif
+
+    return result;
 }
 
 json McpServer::handleRunTrace(const json& params)

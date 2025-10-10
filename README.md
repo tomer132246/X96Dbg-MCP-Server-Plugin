@@ -1,9 +1,10 @@
 # MCPluginForX96Dbg
 
-A 32-bit x96dbg plugin that exposes a lightweight JSON-RPC "Model Context Protocol" (MCP) bridge over TCP. The server allows automations to inspect and control the active debuggee without relying on the debugger UI.
+A dual-architecture x96dbg/x64dbg plugin that exposes a lightweight JSON-RPC "Model Context Protocol" (MCP) bridge over TCP. The server allows automations to inspect and control the active debuggee without relying on the debugger UI.
 
 ## Features
 
+- Builds `.dp32` and `.dp64` binaries from the same codebase—drop them into `x32\plugins` or `x64\plugins` respectively.
 - Starts an MCP server automatically when the plugin loads (default `0.0.0.0:51337`).
 - JSON-RPC endpoints:
   - Memory & modules:
@@ -33,23 +34,51 @@ A 32-bit x96dbg plugin that exposes a lightweight JSON-RPC "Model Context Protoc
 
 ## Build
 
-Configure with CMake (remember to target Win32):
+The build scripts generate both the 32-bit (`.dp32`) and 64-bit (`.dp64`) plugin binaries from a single source tree. Choose the approach that fits your workflow:
+
+### Option 1: CMake presets (recommended)
 
 ```powershell
-cmake -S . -B build -A Win32
-cmake --build build --config Release
+cmake --preset win32-release
+cmake --build --preset win32-release
+cmake --preset x64-release
+cmake --build --preset x64-release
 ```
 
-After either build, take `build/bin/Release/MCPluginForX96Dbg.dp32` together with `MCPluginForX96Dbg.json` and copy them into the x96dbg `x32\plugins` folder (typically `%APPDATA%\x96dbg\x32\plugins`). Restart the 32-bit debugger to load the plugin.
+Each preset configures an isolated build tree (`build/win32` and `build/x64`) targeting the Visual Studio 2022 generators. Successful builds produce:
+
+- `build/win32/bin/win32/Release/MCPluginForX96Dbg.dp32`
+- `build/x64/bin/x64/Release/MCPluginForX96Dbg.dp64`
+
+### Option 2: Manual configuration
+
+```powershell
+cmake -S . -B build/win32 -A Win32 -DMCP_TARGET_ARCH=win32
+cmake --build build/win32 --config Release
+cmake -S . -B build/x64 -A x64 -DMCP_TARGET_ARCH=x64
+cmake --build build/x64 --config Release
+```
+
+After building, copy `MCPluginForX96Dbg.dp32` plus `MCPluginForX96Dbg.json` into `<x64dbg root>\x32\plugins`, and the `.dp64` variant plus the same manifest into `<x64dbg root>\x64\plugins`.
+
+### Combined release bundle
+
+Use the helper script to zip both binaries (and the manifest) into a single distributable archive:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/package-plugin.ps1 -OutputPath dist/MCPluginForX96Dbg-bundle.zip
+```
+
+By default the script expects Release outputs in `build/win32` and `build/x64`. Override the locations with `-Win32BuildDir` or `-X64BuildDir` if you use different build folders.
 
 ## Visual Studio Code setup
 
 1. Install the **CMake Tools** and **C/C++** extensions in Visual Studio Code.
 2. Open this repository folder and allow CMake Tools to detect the project.
-3. From the command palette pick **CMake: Select a Kit** and choose the 32-bit (Win32/x86) Visual Studio compiler toolchain.
-4. Run **CMake: Configure**. This mirrors `cmake -S . -B build -A Win32` and generates the build directory.
-5. Run **CMake: Build** (or press `Ctrl+Shift+B`) targeting the **Release** configuration. The plugin will land in `build/bin/Release/MCPluginForX96Dbg.dll`.
-6. Copy `build/bin/<config>/MCPluginForX96Dbg.dp32` **and** `MCPluginForX96Dbg.json` to `x32\plugins`, then start the 32-bit debugger—loading the plugin will spawn the MCP server on `127.0.0.1:51337` by default.
+3. From the command palette pick **CMake: Select a Kit** and choose the Visual Studio toolchain that matches the target architecture (Win32 for `.dp32`, x64 for `.dp64`).
+4. Run **CMake: Configure** against the desired preset/build folder (for example `win32-release` or `x64-release`).
+5. Run **CMake: Build** (or press `Ctrl+Shift+B`) targeting the **Release** configuration. Outputs land in `build/<arch>/bin/<arch>/Release/` with the appropriate `.dp32` or `.dp64` suffix.
+6. Copy the resulting `.dp32` or `.dp64` binary **and** `MCPluginForX96Dbg.json` into the debugger's `x32\plugins` or `x64\plugins` directory, then start the matching debugger—loading the plugin will spawn the MCP server on `127.0.0.1:51337` by default.
 
 > Note: The server speaks newline-delimited JSON-RPC. If you open the port in a web browser you’ll receive a plain-text help message rather than a JSON response.
 
@@ -97,7 +126,9 @@ Successful responses mirror the same `id` and contain a `result` object. Failure
 - Memory reads are capped at 4096 bytes per request to avoid large transfers.
 
 ## Next Steps
--Implement this for x96-64Dbg
+- Automate dual-architecture builds in CI for every push/tag.
+- Expand test coverage for MCP commands (mock debuggee scenarios).
+- Explore optional TLS transport for remote MCP sessions.
 
 ## Donations
 https://www.paypal.com/donate/?hosted_button_id=JX66BE5XAGVQE

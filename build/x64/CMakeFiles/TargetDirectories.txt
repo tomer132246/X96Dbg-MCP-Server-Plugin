@@ -1,0 +1,3 @@
+C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/x64/CMakeFiles/MCPluginForX96Dbg.dir
+C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/x64/CMakeFiles/ALL_BUILD.dir
+C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/x64/CMakeFiles/ZERO_CHECK.dir

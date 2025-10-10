@@ -1,0 +1,44 @@
+{
+  "version": 5,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "win32-release",
+      "displayName": "Win32 Release",
+      "description": "Configure a Release build targeting x96dbg (32-bit)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "Win32",
+      "binaryDir": "${sourceDir}/build/win32",
+      "cacheVariables": {
+        "MCP_TARGET_ARCH": "win32"
+      }
+    },
+    {
+      "name": "x64-release",
+      "displayName": "x64 Release",
+      "description": "Configure a Release build targeting x64dbg (64-bit)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/x64",
+      "cacheVariables": {
+        "MCP_TARGET_ARCH": "x64"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "win32-release",
+      "configurePreset": "win32-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "x64-release",
+      "configurePreset": "x64-release",
+      "configuration": "Release"
+    }
+  ]
+}

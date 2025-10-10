@@ -23,6 +23,8 @@ static McpServer g_mcpServer;
 namespace
 {
     constexpr auto kPluginName = "MCPluginForX96Dbg";
+    constexpr auto kDebuggerFlavor = sizeof(void*) == 8 ? "x64dbg" : "x96dbg";
+    constexpr auto kArchitectureLabel = sizeof(void*) == 8 ? "x64" : "x86";
 
     bool isValidBindAddress(const char* value)
     {
@@ -62,7 +64,12 @@ namespace
 
     bool cmdStatus(int, char**)
     {
-        LogInfoF("Server status requested: %s (%s:%u)", g_mcpServer.isRunning() ? "running" : "stopped", g_serverHost.c_str(), g_serverPort);
+        LogInfoF("Server status requested: %s (%s:%u) [%s/%s]",
+                 g_mcpServer.isRunning() ? "running" : "stopped",
+                 g_serverHost.c_str(),
+                 g_serverPort,
+                 kDebuggerFlavor,
+                 kArchitectureLabel);
         return true;
     }
 
@@ -175,7 +182,12 @@ extern "C" __declspec(dllexport) bool pluginit(PLUG_INITSTRUCT* initStruct)
         return false;
     }
 
-    LogInfoF("Plugin initialized (handle=%d). Listening on %s:%u", g_pluginHandle, g_serverHost.c_str(), g_serverPort);
+    LogInfoF("Plugin initialized (handle=%d, debugger=%s, arch=%s). Listening on %s:%u",
+             g_pluginHandle,
+             kDebuggerFlavor,
+             kArchitectureLabel,
+             g_serverHost.c_str(),
+             g_serverPort);
     return true;
 }
 
