@@ -9,9 +9,11 @@ A dual-architecture x96dbg/x64dbg plugin that exposes a lightweight JSON-RPC "Mo
 - JSON-RPC endpoints:
   - Memory & modules:
     - `readMemory` – read up to 4096 bytes from the target.
+    - `writeMemory` – write arbitrary byte sequences with optional protection override.
     - `listModules` – enumerate loaded modules (base, size, path, sections).
     - `getExports` / `getImports` – inspect module export/import tables.
     - `getDisassembly` – disassemble instructions at any address.
+    - `patternScan` – search memory ranges with `??` wildcard patterns.
   - Page & runtime diagnostics:
     - `getPageRights` / `setPageRights` – inspect or mutate page protection.
     - `memIsCodePage` – identify executable regions.
@@ -31,6 +33,49 @@ A dual-architecture x96dbg/x64dbg plugin that exposes a lightweight JSON-RPC "Mo
   - `mcp.restart` – restart the server without reloading the plugin.
   - `mcp.port <port>` – persist a new TCP port (saved to the `MCP` setting bucket).
   - `mcp.host <IPv4|0.0.0.0|*>` – persist the bind address (default `127.0.0.1`). Use `0.0.0.0` to accept LAN clients.
+
+## Memory tooling quick reference
+
+### `writeMemory`
+
+- **Required**: `address` (hex string or integer), `data` (byte string).
+- **Optional**:
+  - `format`: `"hex"` (default) or `"ascii"` input decoding.
+  - `force`: `true` temporarily raises the page protection to `RW` if it is not already writable.
+- Returns the number of bytes written, the address echoed back, and the protection before/after the write.
+
+```jsonc
+{
+  "jsonrpc": "2.0",
+  "id": 42,
+  "method": "writeMemory",
+  "params": {
+    "address": "0x401000",
+    "data": "90 90 90 90",
+    "force": true
+  }
+}
+```
+
+### `patternScan`
+
+- **Required**: `pattern` containing space-separated hex bytes; use `??` for single-byte wildcards.
+- **Range**: provide either `start` & `end` addresses or `start` & `size` (unsigned integer).
+- **Optional**: `maxResults` caps the number of returned matches (defaults to unlimited).
+- Returns the normalized pattern, scan bounds, total bytes scanned, and a list of match addresses.
+
+```jsonc
+{
+  "jsonrpc": "2.0",
+  "id": 43,
+  "method": "patternScan",
+  "params": {
+    "start": "0x400000",
+    "end": "0x410000",
+    "pattern": "48 8B ?? ?? 48 89 ??"
+  }
+}
+```
 
 ## Build
 
