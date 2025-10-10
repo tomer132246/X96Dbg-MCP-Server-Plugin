@@ -82,7 +82,7 @@ Successful responses mirror the same `id` and contain a `result` object. Failure
 - Memory reads are capped at 4096 bytes per request to avoid large transfers.
 
 ## Next Steps
+-Implement this for x96-64Dbg
 
-- Expand the protocol surface (e.g., breakpoint enumeration/removal, thread control).
-- Add optional authentication for remote scenarios.
-- Ship a simple CLI client for scripting workflows.
+## Donations
+https://www.paypal.com/donate/?hosted_button_id=JX66BE5XAGVQE
