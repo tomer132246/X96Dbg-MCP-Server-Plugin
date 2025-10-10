@@ -3052,11 +3052,32 @@ json McpServer::handleToolsCall(const json& params)
         summary = "Exports for " + payload.value("module", std::string("?")) + ": " + std::to_string(exports.size());
         if(!exports.empty())
         {
-            const auto& first = exports[0];
-            if(first.contains("name"))
-                extraText.push_back(std::string("First export: ") + first.value("name", std::string("")));
-            if(first.contains("address"))
-                extraText.push_back(std::string("Address: ") + first.value("address", std::string("")));
+            std::ostringstream lines;
+            for(size_t i = 0; i < exports.size(); ++i)
+            {
+                const auto& entry = exports[i];
+                const int ordinal = entry.value("ordinal", 0);
+                const std::string name = entry.value("name", std::string("?"));
+                const std::string address = entry.value("address", std::string(""));
+                const bool forwarded = entry.value("forwarded", false);
+                lines << "#" << ordinal << " " << name;
+                if(!address.empty())
+                    lines << " @ " << address;
+                if(forwarded)
+                {
+                    const std::string forwardName = entry.value("forwardName", std::string(""));
+                    if(!forwardName.empty())
+                        lines << " -> " << forwardName;
+                    else
+                        lines << " (forwarded)";
+                }
+                if(i + 1 < exports.size())
+                    lines << '\n';
+            }
+
+            std::string text = lines.str();
+            if(!text.empty())
+                extraText.push_back(std::string("Exports:\n") + text);
         }
     }
     else if(toolName == "getImports")
@@ -3066,11 +3087,41 @@ json McpServer::handleToolsCall(const json& params)
         summary = "Imports for " + payload.value("module", std::string("?")) + ": " + std::to_string(imports.size());
         if(!imports.empty())
         {
-            const auto& first = imports[0];
-            if(first.contains("name"))
-                extraText.push_back(std::string("First import: ") + first.value("name", std::string("")));
-            if(first.contains("iatAddress"))
-                extraText.push_back(std::string("IAT: ") + first.value("iatAddress", std::string("")));
+            std::ostringstream lines;
+            for(size_t i = 0; i < imports.size(); ++i)
+            {
+                const auto& entry = imports[i];
+                const bool byOrdinal = entry.value("byOrdinal", false);
+                std::string label;
+                if(byOrdinal)
+                    label = std::string("ord ") + std::to_string(entry.value("ordinal", 0));
+                const std::string name = entry.value("name", std::string(""));
+                if(!label.empty())
+                {
+                    if(!name.empty())
+                        label += " (" + name + ")";
+                }
+                else
+                {
+                    label = !name.empty() ? name : std::string("<anon>");
+                }
+
+                const std::string undecorated = entry.value("undecoratedName", std::string(""));
+                const std::string iatAddress = entry.value("iatAddress", std::string(""));
+
+                lines << label;
+                if(!undecorated.empty() && undecorated != name)
+                    lines << " aka " << undecorated;
+                if(!iatAddress.empty())
+                    lines << " @ " << iatAddress;
+
+                if(i + 1 < imports.size())
+                    lines << '\n';
+            }
+
+            std::string text = lines.str();
+            if(!text.empty())
+                extraText.push_back(std::string("Imports:\n") + text);
         }
     }
     else if(toolName == "getDisassembly")
