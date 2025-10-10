@@ -57,6 +57,8 @@ After either build, take `build/bin/Release/MCPluginForX96Dbg.dp32` together wit
 
 Visual Studio Code can forward requests to the plugin's MCP server via the Model Context Protocol bridge. Create `.vscode/mcp.json` (or update your global `mcp.json`) with the following entry:
 
+NOTE: ${workspaceFolder} is not allowed since it running in py context. please replace it to a actual path.
+
 ```json
 {
   "mcpServers": {
