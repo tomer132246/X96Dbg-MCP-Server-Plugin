@@ -42,6 +42,8 @@ private:
     nlohmann::json handleSetBreakpoint(const nlohmann::json& params);
     nlohmann::json handleGetRegisters(const nlohmann::json& params);
     nlohmann::json handleRunTrace(const nlohmann::json& params);
+    nlohmann::json handleWriteMemory(const nlohmann::json& params);
+    nlohmann::json handlePatternScan(const nlohmann::json& params);
     nlohmann::json handleGetExports(const nlohmann::json& params);
     nlohmann::json handleGetImports(const nlohmann::json& params);
     nlohmann::json handleGetDisassembly(const nlohmann::json& params);

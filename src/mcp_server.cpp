@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+#include <limits>
 
 #include <ws2tcpip.h>
 
@@ -24,6 +25,13 @@
 #include "logging.h"
 
 #pragma comment(lib, "Ws2_32.lib")
+
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
 
 using json = nlohmann::json;
 
@@ -340,6 +348,114 @@ namespace
         default:
             return std::string("value(") + std::to_string(value) + ')';
         }
+    }
+
+    std::vector<unsigned char> parseFormattedByteString(const std::string& dataText, const std::string& formatText)
+    {
+        const std::string format = toLowerCopy(formatText);
+
+        if(format == "hex" || format == "bytes" || format == "byte" || format == "raw")
+        {
+            std::string filtered;
+            filtered.reserve(dataText.size());
+            for(size_t i = 0; i < dataText.size(); ++i)
+            {
+                char ch = dataText[i];
+                if(std::isspace(static_cast<unsigned char>(ch)) || ch == ',' || ch == ';')
+                    continue;
+                if(ch == '0' && i + 1 < dataText.size() && (dataText[i + 1] == 'x' || dataText[i + 1] == 'X'))
+                {
+                    ++i;
+                    continue;
+                }
+                filtered.push_back(ch);
+            }
+
+            if(filtered.size() % 2 != 0 || filtered.empty())
+                throw std::runtime_error("Hex byte sequence must contain an even number of hexadecimal characters");
+
+            std::vector<unsigned char> bytes;
+            bytes.reserve(filtered.size() / 2);
+            for(size_t i = 0; i < filtered.size(); i += 2)
+            {
+                const char hi = filtered[i];
+                const char lo = filtered[i + 1];
+                if(!std::isxdigit(static_cast<unsigned char>(hi)) || !std::isxdigit(static_cast<unsigned char>(lo)))
+                    throw std::runtime_error("Hex byte sequence contains non-hexadecimal characters");
+                unsigned int value = 0;
+                value = static_cast<unsigned int>(std::stoul(filtered.substr(i, 2), nullptr, 16));
+                bytes.push_back(static_cast<unsigned char>(value & 0xFFu));
+            }
+
+            return bytes;
+        }
+
+        if(format == "ascii" || format == "utf8" || format == "string" || format == "text")
+        {
+            std::vector<unsigned char> bytes(dataText.begin(), dataText.end());
+            if(bytes.empty())
+                throw std::runtime_error("ASCII/UTF-8 payload cannot be empty");
+            return bytes;
+        }
+
+        throw std::runtime_error("Unsupported data format: " + formatText + " (use 'hex' or 'ascii')");
+    }
+
+    struct PatternParseResult
+    {
+        std::vector<int> pattern;
+        std::string normalized;
+    };
+
+    PatternParseResult parsePatternExpression(const std::string& patternText)
+    {
+        std::istringstream stream(patternText);
+        std::string token;
+        PatternParseResult result;
+
+        while(stream >> token)
+        {
+            if(token.empty())
+                continue;
+
+            if(token == "?" || token == "??")
+            {
+                result.pattern.push_back(-1);
+                if(!result.normalized.empty())
+                    result.normalized.push_back(' ');
+                result.normalized += "??";
+                continue;
+            }
+
+            if(token.size() == 1 && token[0] == '?')
+            {
+                result.pattern.push_back(-1);
+                if(!result.normalized.empty())
+                    result.normalized.push_back(' ');
+                result.normalized += "??";
+                continue;
+            }
+
+            if(token.rfind("0x", 0) == 0 || token.rfind("0X", 0) == 0)
+                token = token.substr(2);
+
+            if(token.size() != 2 || !std::isxdigit(static_cast<unsigned char>(token[0])) || !std::isxdigit(static_cast<unsigned char>(token[1])))
+                throw std::runtime_error("Pattern tokens must be hex bytes or '?' wildcards");
+
+            const unsigned int value = static_cast<unsigned int>(std::stoul(token, nullptr, 16));
+            result.pattern.push_back(static_cast<int>(value & 0xFFu));
+
+            if(!result.normalized.empty())
+                result.normalized.push_back(' ');
+            std::ostringstream oss;
+            oss << std::uppercase << std::setfill('0') << std::setw(2) << std::hex << (value & 0xFFu);
+            result.normalized += oss.str();
+        }
+
+        if(result.pattern.empty())
+            throw std::runtime_error("Pattern must contain at least one byte or wildcard token");
+
+        return result;
     }
 }
 
@@ -744,6 +860,11 @@ bool McpServer::processRequest(const json& request, json& response)
             LogInfo("Processing setPageRights request");
             result = handleSetPageRights(params);
         }
+        else if(method == "writeMemory")
+        {
+            LogInfo("Processing writeMemory request");
+            result = handleWriteMemory(params);
+        }
         else if(method == "memIsCodePage")
         {
             LogInfo("Processing memIsCodePage request");
@@ -758,6 +879,11 @@ bool McpServer::processRequest(const json& request, json& response)
         {
             LogInfo("Processing memBpSize request");
             result = handleMemBpSize(params);
+        }
+        else if(method == "patternScan")
+        {
+            LogInfo("Processing patternScan request");
+            result = handlePatternScan(params);
         }
         else if(method == "listBreakpoints")
         {
@@ -2060,6 +2186,275 @@ json McpServer::handleRunTrace(const json& params)
     return json::object({{"status", "ok"}});
 }
 
+json McpServer::handleWriteMemory(const json& params)
+{
+    if(!DbgIsDebugging())
+        throw std::runtime_error("No debuggee attached");
+
+    if(!params.contains("address") || !params.contains("data"))
+        throw std::runtime_error("Missing parameters (address, data required)");
+
+    duint address = 0;
+    if(!parseAddress(params.at("address"), address))
+        throw std::runtime_error("Invalid address parameter");
+
+    const std::string dataText = params.at("data").get<std::string>();
+    if(dataText.empty())
+        throw std::runtime_error("Data payload must not be empty");
+
+    const std::string formatText = params.value("format", std::string("hex"));
+    const bool force = params.value("force", false);
+
+    const std::vector<unsigned char> bytes = parseFormattedByteString(dataText, formatText);
+    if(bytes.empty())
+        throw std::runtime_error("No bytes to write");
+
+    unsigned long originalProtect = Script::Memory::GetProtect(address, false, true);
+    std::string originalRights = rightsStringFromProtect(originalProtect);
+
+    if(originalRights.empty())
+    {
+        const DBGFUNCTIONS* dbg = DbgFunctions();
+        if(dbg && dbg->GetPageRights)
+        {
+            char rightsBuffer[RIGHTS_STRING_SIZE] = {};
+            if(dbg->GetPageRights(address, rightsBuffer))
+                originalRights = rightsBuffer;
+        }
+    }
+
+    unsigned long elevatedProtect = originalProtect;
+    std::string elevatedRights;
+    bool changedProtect = false;
+    bool restoreSucceeded = true;
+
+    const duint writeSize = static_cast<duint>(bytes.size());
+
+    if(force)
+    {
+        std::string requestedRights = originalRights;
+        if(requestedRights.empty())
+            requestedRights = "RW";
+
+        if(requestedRights.find('R') == std::string::npos)
+            requestedRights.push_back('R');
+        if(requestedRights.find('W') == std::string::npos)
+            requestedRights.push_back('W');
+
+        elevatedProtect = protectionFromRightsString(requestedRights);
+        if(elevatedProtect == 0)
+            elevatedProtect = PAGE_READWRITE;
+
+        if(elevatedProtect != originalProtect)
+        {
+            if(!Script::Memory::SetProtect(address, elevatedProtect, writeSize))
+                throw std::runtime_error("Failed to adjust memory protection prior to force write");
+            changedProtect = true;
+            elevatedRights = rightsStringFromProtect(elevatedProtect);
+        }
+    }
+
+    if(!DbgMemWrite(address, bytes.data(), writeSize))
+    {
+        if(changedProtect)
+        {
+            if(!Script::Memory::SetProtect(address, originalProtect, writeSize))
+                LogWarningF("Failed to restore memory protection after write failure at %s", formatAddress(address).c_str());
+        }
+        throw std::runtime_error("DbgMemWrite failed");
+    }
+
+    if(changedProtect)
+    {
+        if(!Script::Memory::SetProtect(address, originalProtect, writeSize))
+        {
+            restoreSucceeded = false;
+            LogWarningF("Failed to restore memory protection at %s", formatAddress(address).c_str());
+        }
+    }
+
+    json result = {
+        {"address", formatAddress(address)},
+        {"bytesWritten", bytes.size()},
+        {"format", toLowerCopy(formatText)},
+        {"force", force},
+        {"pageProtectBefore", originalRights},
+        {"pageProtectAfter", changedProtect ? elevatedRights : originalRights},
+        {"protectionRestored", !changedProtect || restoreSucceeded}
+    };
+
+    if(changedProtect)
+    {
+        result["temporaryProtect"] = elevatedRights;
+        result["temporaryProtectValue"] = elevatedProtect;
+        result["originalProtectValue"] = originalProtect;
+    }
+
+    return result;
+}
+
+json McpServer::handlePatternScan(const json& params)
+{
+    if(!DbgIsDebugging())
+        throw std::runtime_error("No debuggee attached");
+
+    if(!params.contains("pattern"))
+        throw std::runtime_error("Missing pattern parameter");
+
+    const PatternParseResult parsedPattern = parsePatternExpression(params.at("pattern").get<std::string>());
+    const size_t patternLength = parsedPattern.pattern.size();
+    if(patternLength == 0)
+        throw std::runtime_error("Pattern length must be greater than zero");
+
+    duint start = 0;
+    if(params.contains("start"))
+    {
+        if(!parseAddress(params.at("start"), start))
+            throw std::runtime_error("Invalid start parameter");
+    }
+    else if(params.contains("address"))
+    {
+        if(!parseAddress(params.at("address"), start))
+            throw std::runtime_error("Invalid address parameter");
+    }
+    else
+    {
+        throw std::runtime_error("Missing start or address parameter");
+    }
+
+    duint endInclusive = 0;
+    duint endExclusive = 0;
+
+    if(params.contains("end"))
+    {
+        if(!parseAddress(params.at("end"), endInclusive))
+            throw std::runtime_error("Invalid end parameter");
+        if(endInclusive < start)
+            throw std::runtime_error("End address must be greater than or equal to start address");
+        endExclusive = endInclusive + 1;
+    }
+    else if(params.contains("size"))
+    {
+        const auto sizeValue = params.at("size");
+        if(!sizeValue.is_number_unsigned())
+            throw std::runtime_error("Size parameter must be an unsigned integer");
+        const unsigned long long rawSize = sizeValue.get<unsigned long long>();
+        if(rawSize == 0)
+            throw std::runtime_error("Size parameter must be greater than zero");
+        if(rawSize > std::numeric_limits<duint>::max())
+            throw std::runtime_error("Size parameter exceeds address space");
+        if(rawSize > std::numeric_limits<duint>::max() - start)
+            throw std::runtime_error("Start + size would overflow address space");
+        endExclusive = start + static_cast<duint>(rawSize);
+        endInclusive = endExclusive - 1;
+    }
+    else
+    {
+        throw std::runtime_error("Missing end or size parameter");
+    }
+
+    if(endExclusive <= start)
+        throw std::runtime_error("Scan range must be positive");
+
+    size_t maxResults = std::numeric_limits<size_t>::max();
+    if(params.contains("maxResults"))
+    {
+        const auto maxValue = params.at("maxResults");
+        if(!maxValue.is_number_unsigned())
+            throw std::runtime_error("maxResults must be an unsigned integer");
+        maxResults = static_cast<size_t>(maxValue.get<unsigned long long>());
+        if(maxResults == 0)
+            maxResults = std::numeric_limits<size_t>::max();
+    }
+
+    const size_t chunkSize = 0x2000;
+    std::vector<unsigned char> overlap;
+    overlap.reserve(patternLength > 0 ? patternLength - 1 : 0);
+    std::vector<duint> matches;
+    matches.reserve(16);
+
+    duint cursor = start;
+    while(cursor < endExclusive)
+    {
+        const duint remaining = endExclusive - cursor;
+        const size_t readSize = static_cast<size_t>(std::min<duint>(static_cast<duint>(chunkSize), remaining));
+        std::vector<unsigned char> chunk(readSize);
+
+        if(!DbgMemRead(cursor, chunk.data(), static_cast<duint>(readSize)))
+        {
+            cursor += static_cast<duint>(readSize);
+            overlap.clear();
+            continue;
+        }
+
+        std::vector<unsigned char> searchBuffer;
+        searchBuffer.reserve(overlap.size() + chunk.size());
+        searchBuffer.insert(searchBuffer.end(), overlap.begin(), overlap.end());
+        searchBuffer.insert(searchBuffer.end(), chunk.begin(), chunk.end());
+
+        const duint bufferBase = cursor - static_cast<duint>(overlap.size());
+
+        if(searchBuffer.size() >= patternLength)
+        {
+            const size_t limit = searchBuffer.size() - patternLength;
+            for(size_t offset = 0; offset <= limit; ++offset)
+            {
+                bool matched = true;
+                for(size_t i = 0; i < patternLength; ++i)
+                {
+                    const int patternByte = parsedPattern.pattern[i];
+                    if(patternByte >= 0 && static_cast<unsigned char>(patternByte) != searchBuffer[offset + i])
+                    {
+                        matched = false;
+                        break;
+                    }
+                }
+
+                if(matched)
+                {
+                    const duint matchAddress = bufferBase + static_cast<duint>(offset);
+                    if(matchAddress >= start && matchAddress + static_cast<duint>(patternLength) <= endExclusive)
+                    {
+                        matches.push_back(matchAddress);
+                        if(matches.size() >= maxResults)
+                            break;
+                    }
+                }
+            }
+        }
+
+        if(matches.size() >= maxResults)
+            break;
+
+        if(patternLength > 1)
+        {
+            const size_t keep = std::min(patternLength - 1, searchBuffer.size());
+            overlap.assign(searchBuffer.begin() + (searchBuffer.size() - keep), searchBuffer.end());
+        }
+        else
+        {
+            overlap.clear();
+        }
+
+        cursor += static_cast<duint>(readSize);
+    }
+
+    json matchArray = json::array();
+    for(duint matchAddress : matches)
+        matchArray.push_back(formatAddress(matchAddress));
+
+    return json::object({
+        {"pattern", parsedPattern.normalized},
+        {"patternLength", patternLength},
+        {"start", formatAddress(start)},
+        {"end", formatAddress(endInclusive)},
+        {"scannedBytes", static_cast<unsigned long long>(endExclusive - start)},
+        {"matchCount", matches.size()},
+        {"matches", matchArray},
+        {"maxResults", matches.size() >= maxResults ? maxResults : matches.size()}
+    });
+}
+
 json McpServer::handleInitialize(const json& params)
 {
     json client = params.contains("client") ? params.at("client") : json::object();
@@ -2436,6 +2831,95 @@ json McpServer::handleToolsList()
     });
 
     tools.push_back({
+        {"name", "writeMemory"},
+        {"description", "Write data to the target process memory with optional protection override."},
+        {"inputSchema", json::object({
+            {"type", "object"},
+            {"properties", json::object({
+                {"address", json::object({
+                    {"type", "string"},
+                    {"description", "Base address to write (0x-prefixed hex or decimal)."}
+                })},
+                {"data", json::object({
+                    {"type", "string"},
+                    {"description", "Bytes to write (hex like '90 90' or ASCII)."}
+                })},
+                {"format", json::object({
+                    {"type", "string"},
+                    {"enum", json::array({"hex", "ascii"})},
+                    {"description", "Encoding of the data string (default hex)."}
+                })},
+                {"force", json::object({
+                    {"type", "boolean"},
+                    {"description", "Temporarily elevate page protections to allow the write."}
+                })}
+            })},
+            {"required", json::array({"address", "data"})}
+        })},
+        {"outputSchema", json::object({
+            {"type", "object"},
+            {"properties", json::object({
+                {"address", json::object({{"type", "string"}})},
+                {"force", json::object({{"type", "boolean"}})},
+                {"bytesWritten", json::object({{"type", "integer"}})},
+                {"pageProtectBefore", json::object({{"type", "string"}})},
+                {"pageProtectAfter", json::object({{"type", "string"}})},
+                {"protectionRestored", json::object({{"type", "boolean"}})}
+            })}
+        })}
+    });
+
+    tools.push_back({
+        {"name", "patternScan"},
+        {"description", "Scan memory for a pattern with wildcard support."},
+        {"inputSchema", json::object({
+            {"type", "object"},
+            {"properties", json::object({
+                {"pattern", json::object({
+                    {"type", "string"},
+                    {"description", "Pattern like '48 8B ?? ?? 48 89' (?? wildcards)."}
+                })},
+                {"start", json::object({
+                    {"type", "string"},
+                    {"description", "Start address (0x-prefixed hex or decimal)."}
+                })},
+                {"address", json::object({
+                    {"type", "string"},
+                    {"description", "Alias for start address."}
+                })},
+                {"end", json::object({
+                    {"type", "string"},
+                    {"description", "Inclusive end address."}
+                })},
+                {"size", json::object({
+                    {"type", "integer"},
+                    {"minimum", 1},
+                    {"description", "Size of range to scan (alternative to end)."}
+                })},
+                {"maxResults", json::object({
+                    {"type", "integer"},
+                    {"minimum", 1},
+                    {"description", "Maximum number of matches to return."}
+                })}
+            })},
+            {"required", json::array({"pattern"})}
+        })},
+        {"outputSchema", json::object({
+            {"type", "object"},
+            {"properties", json::object({
+                {"pattern", json::object({{"type", "string"}})},
+                {"patternLength", json::object({{"type", "integer"}})},
+                {"start", json::object({{"type", "string"}})},
+                {"end", json::object({{"type", "string"}})},
+                {"scannedBytes", json::object({{"type", "integer"}})},
+                {"maxResults", json::object({{"type", "integer"}})},
+                {"matchCount", json::object({{"type", "integer"}})},
+                {"matches", json::object({{"type", "array"}})}
+            })}
+        })}
+    });
+
+    tools.push_back({
         {"name", "ping"},
         {"description", "Health check."},
         {"inputSchema", json::object({{"type", "object"}})},
@@ -2501,6 +2985,22 @@ json McpServer::handleToolsCall(const json& params)
         if(!valueHex.empty())
             extraText.push_back(std::string("Value:\n") + valueHex);
     }
+    else if(toolName == "writeMemory")
+    {
+        payload = handleWriteMemory(arguments);
+        const std::string address = payload.value("address", std::string(""));
+    const size_t written = static_cast<size_t>(payload.value("bytesWritten", 0ull));
+        summary = "Wrote " + std::to_string(written) + " bytes to " + address;
+
+        if(payload.value("force", false))
+        {
+            std::string protectBefore = payload.value("pageProtectBefore", std::string(""));
+            std::string protectAfter = payload.value("pageProtectAfter", std::string(""));
+            extraText.push_back(std::string("Protection before: ") + (protectBefore.empty() ? "unknown" : protectBefore));
+            extraText.push_back(std::string("Protection after: ") + (protectAfter.empty() ? "unknown" : protectAfter));
+            extraText.push_back(std::string("Restored: ") + (payload.value("protectionRestored", true) ? "yes" : "no"));
+        }
+    }
     else if(toolName == "listModules")
     {
         payload = handleListModules(arguments);
@@ -2523,6 +3023,26 @@ json McpServer::handleToolsCall(const json& params)
                     names += '\n';
             }
             extraText.push_back(std::string("Modules:\n") + names);
+        }
+    }
+    else if(toolName == "patternScan")
+    {
+        payload = handlePatternScan(arguments);
+    const size_t matchCount = static_cast<size_t>(payload.value("matchCount", 0ull));
+        summary = std::to_string(matchCount) + std::string(matchCount == 1 ? " match" : " matches") + " for pattern";
+
+        const auto matchesJson = payload.contains("matches") && payload.at("matches").is_array() ? payload.at("matches") : json::array();
+        if(!matchesJson.empty())
+        {
+            std::string list;
+            size_t previewCount = std::min<size_t>(matchesJson.size(), 5);
+            for(size_t i = 0; i < previewCount; ++i)
+            {
+                list += matchesJson[i].get<std::string>();
+                if(i + 1 < previewCount)
+                    list.push_back('\n');
+            }
+            extraText.push_back(std::string("Matches:\n") + list);
         }
     }
     else if(toolName == "getExports")
@@ -2625,17 +3145,50 @@ json McpServer::handleToolsCall(const json& params)
     {
         payload = handleGetThreads(arguments);
         const int count = payload.value("threadCount", 0);
-        summary = std::to_string(count) + std::string(" threads");
+        const duint currentTid = payload.value("currentThreadId", 0ull);
+        const auto threadList = payload.contains("threads") && payload.at("threads").is_array() ? payload.at("threads") : json::array();
 
-        if(payload.contains("currentThreadId"))
+        std::ostringstream summaryLine;
+        summaryLine << count << " threads";
+        if(currentTid)
+            summaryLine << " (current=" << currentTid << ")";
+        summary = summaryLine.str();
+
+        if(!threadList.empty())
         {
-            std::ostringstream line;
-            line << "Current thread ID=" << payload.value("currentThreadId", 0);
-            if(payload.contains("currentThreadCip"))
-                line << " CIP=" << payload.value("currentThreadCip", std::string(""));
-            if(payload.contains("currentThreadName"))
-                line << " (" << payload.value("currentThreadName", std::string("")) << ")";
-            extraText.push_back(line.str());
+            std::ostringstream allThreads;
+            for(const auto& threadEntry : threadList)
+            {
+                const int index = threadEntry.value("index", -1);
+                const int threadNumber = threadEntry.value("threadNumber", -1);
+                const duint tid = threadEntry.value("threadId", 0ull);
+                const std::string name = threadEntry.value("name", std::string());
+                const std::string cip = threadEntry.value("cip", std::string());
+                const auto suspendCount = threadEntry.value("suspendCount", 0);
+                const auto priority = threadEntry.contains("priority") && threadEntry.at("priority").is_object()
+                                          ? threadEntry.at("priority").value("label", std::string())
+                                          : std::string();
+
+                allThreads << (index >= 0 ? std::to_string(index) : "?") << ": ";
+                if(threadNumber >= 0)
+                    allThreads << "thread#" << threadNumber << ' ';
+                allThreads << "tid=" << tid;
+                if(tid == currentTid)
+                    allThreads << " [current]";
+                if(!name.empty())
+                    allThreads << " (" << name << ')';
+                if(!cip.empty())
+                    allThreads << " CIP=" << cip;
+                if(!priority.empty())
+                    allThreads << " priority=" << priority;
+                if(suspendCount > 0)
+                    allThreads << " suspended=" << suspendCount;
+                allThreads << '\n';
+            }
+
+            const std::string threadText = allThreads.str();
+            if(!threadText.empty())
+                extraText.push_back(std::string("Threads:\n") + threadText);
         }
     }
     else if(toolName == "setBreakpoint")

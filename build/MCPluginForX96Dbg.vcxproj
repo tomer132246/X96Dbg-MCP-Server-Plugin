@@ -59,25 +59,25 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>10.0.20506.1</_ProjectFileVersion>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\build\bin\Debug\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\build\bin\win32\Debug\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">MCPluginForX96Dbg.dir\Debug\</IntDir>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">MCPluginForX96Dbg</TargetName>
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">.dp32</TargetExt>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</LinkIncremental>
     <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</GenerateManifest>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\build\bin\Release\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\build\bin\win32\Release\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MCPluginForX96Dbg.dir\Release\</IntDir>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">MCPluginForX96Dbg</TargetName>
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">.dp32</TargetExt>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</LinkIncremental>
     <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</GenerateManifest>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|Win32'">C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\build\bin\MinSizeRel\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|Win32'">C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\build\bin\win32\MinSizeRel\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|Win32'">MCPluginForX96Dbg.dir\MinSizeRel\</IntDir>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|Win32'">MCPluginForX96Dbg</TargetName>
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|Win32'">.dp32</TargetExt>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|Win32'">false</LinkIncremental>
     <GenerateManifest Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|Win32'">true</GenerateManifest>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|Win32'">C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\build\bin\RelWithDebInfo\</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|Win32'">C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\build\bin\win32\RelWithDebInfo\</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|Win32'">MCPluginForX96Dbg.dir\RelWithDebInfo\</IntDir>
     <TargetName Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|Win32'">MCPluginForX96Dbg</TargetName>
     <TargetExt Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|Win32'">.dp32</TargetExt>
@@ -97,11 +97,11 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <UseFullPaths>false</UseFullPaths>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;CMAKE_INTDIR="Debug";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;MCP_TARGET_ARCH_STRING="win32";CMAKE_INTDIR="Debug";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
       <ObjectFileName>$(IntDir)</ObjectFileName>
     </ClCompile>
     <ResourceCompile>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WINDOWS;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;CMAKE_INTDIR=\"Debug\";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_DEBUG;_WINDOWS;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;MCP_TARGET_ARCH_STRING=\"win32\";CMAKE_INTDIR=\"Debug\";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\pluginsdk;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\third_party\nlohmann;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Midl>
@@ -118,8 +118,8 @@
       <AdditionalOptions>%(AdditionalOptions) /machine:X86</AdditionalOptions>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
-      <ImportLibrary>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/lib/Debug/MCPluginForX96Dbg.lib</ImportLibrary>
-      <ProgramDataBaseFile>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/bin/Debug/MCPluginForX96Dbg.pdb</ProgramDataBaseFile>
+      <ImportLibrary>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/lib/win32/Debug/MCPluginForX96Dbg.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/bin/win32/Debug/MCPluginForX96Dbg.pdb</ProgramDataBaseFile>
       <SubSystem>Console</SubSystem>
     </Link>
     <ProjectReference>
@@ -137,13 +137,13 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <UseFullPaths>false</UseFullPaths>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;CMAKE_INTDIR="Release";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;MCP_TARGET_ARCH_STRING="win32";CMAKE_INTDIR="Release";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <DebugInformationFormat>
       </DebugInformationFormat>
     </ClCompile>
     <ResourceCompile>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;CMAKE_INTDIR=\"Release\";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;MCP_TARGET_ARCH_STRING=\"win32\";CMAKE_INTDIR=\"Release\";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\pluginsdk;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\third_party\nlohmann;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Midl>
@@ -160,8 +160,8 @@
       <AdditionalOptions>%(AdditionalOptions) /machine:X86</AdditionalOptions>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
-      <ImportLibrary>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/lib/Release/MCPluginForX96Dbg.lib</ImportLibrary>
-      <ProgramDataBaseFile>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/bin/Release/MCPluginForX96Dbg.pdb</ProgramDataBaseFile>
+      <ImportLibrary>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/lib/win32/Release/MCPluginForX96Dbg.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/bin/win32/Release/MCPluginForX96Dbg.pdb</ProgramDataBaseFile>
       <SubSystem>Console</SubSystem>
     </Link>
     <ProjectReference>
@@ -179,13 +179,13 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <UseFullPaths>false</UseFullPaths>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;CMAKE_INTDIR="MinSizeRel";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;MCP_TARGET_ARCH_STRING="win32";CMAKE_INTDIR="MinSizeRel";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <DebugInformationFormat>
       </DebugInformationFormat>
     </ClCompile>
     <ResourceCompile>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;CMAKE_INTDIR=\"MinSizeRel\";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;MCP_TARGET_ARCH_STRING=\"win32\";CMAKE_INTDIR=\"MinSizeRel\";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\pluginsdk;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\third_party\nlohmann;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Midl>
@@ -202,8 +202,8 @@
       <AdditionalOptions>%(AdditionalOptions) /machine:X86</AdditionalOptions>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
-      <ImportLibrary>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/lib/MinSizeRel/MCPluginForX96Dbg.lib</ImportLibrary>
-      <ProgramDataBaseFile>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/bin/MinSizeRel/MCPluginForX96Dbg.pdb</ProgramDataBaseFile>
+      <ImportLibrary>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/lib/win32/MinSizeRel/MCPluginForX96Dbg.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/bin/win32/MinSizeRel/MCPluginForX96Dbg.pdb</ProgramDataBaseFile>
       <SubSystem>Console</SubSystem>
     </Link>
     <ProjectReference>
@@ -222,11 +222,11 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <UseFullPaths>false</UseFullPaths>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;CMAKE_INTDIR="RelWithDebInfo";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;MCP_TARGET_ARCH_STRING="win32";CMAKE_INTDIR="RelWithDebInfo";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
       <ObjectFileName>$(IntDir)</ObjectFileName>
     </ClCompile>
     <ResourceCompile>
-      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;CMAKE_INTDIR=\"RelWithDebInfo\";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);WIN32;_WINDOWS;NDEBUG;_USRDLL;MCPLUGINFORX96DBG_EXPORTS;MCP_TARGET_ARCH_STRING=\"win32\";CMAKE_INTDIR=\"RelWithDebInfo\";MCPluginForX96Dbg_EXPORTS</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\pluginsdk;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\third_party\nlohmann;C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Midl>
@@ -243,8 +243,8 @@
       <AdditionalOptions>%(AdditionalOptions) /machine:X86</AdditionalOptions>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <IgnoreSpecificDefaultLibraries>%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
-      <ImportLibrary>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/lib/RelWithDebInfo/MCPluginForX96Dbg.lib</ImportLibrary>
-      <ProgramDataBaseFile>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/bin/RelWithDebInfo/MCPluginForX96Dbg.pdb</ProgramDataBaseFile>
+      <ImportLibrary>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/lib/win32/RelWithDebInfo/MCPluginForX96Dbg.lib</ImportLibrary>
+      <ProgramDataBaseFile>C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/bin/win32/RelWithDebInfo/MCPluginForX96Dbg.pdb</ProgramDataBaseFile>
       <SubSystem>Console</SubSystem>
     </Link>
     <ProjectReference>
