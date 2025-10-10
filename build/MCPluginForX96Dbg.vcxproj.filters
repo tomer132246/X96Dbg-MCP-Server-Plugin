@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\src\logging.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\src\mcp_server.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\src\plugin.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\src\mcp_server.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\src\logging.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\tomer\Desktop\Projects\MCPluginForX96Dbg\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{4393229D-500B-3895-920A-755BB9219F28}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{C1F2A98D-216B-363C-B0B2-348AD804547D}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

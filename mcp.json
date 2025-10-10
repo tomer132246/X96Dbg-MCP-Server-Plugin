@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "x96dbg-mcp": {
+      "command": "python",
+      "args": [
+        "${workspaceFolder}/tools/mcp_tcp_bridge.py",
+        "--host",
+        "127.0.0.1", //remove this comment - change this to the IP address of the machine running x96dbg if it's not local.
+        "--port",
+        "51337"
+      ],
+      "description": "Connects VS Code to the x96dbg MCP plugin running on the local machine."
+    }
+  }
+}

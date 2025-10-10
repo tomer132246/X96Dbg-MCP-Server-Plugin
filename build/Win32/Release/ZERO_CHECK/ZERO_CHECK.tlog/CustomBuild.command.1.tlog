@@ -1,0 +1,10 @@
+^C:\USERS\TOMER\DESKTOP\PROJECTS\MCPLUGINFORX96DBG\BUILD\CMAKEFILES\5CAEC0111334744D41CEC2033EDAC660\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg -BC:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/tomer/Desktop/Projects/MCPluginForX96Dbg/build/MCPluginForX96Dbg.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
