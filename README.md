@@ -1,6 +1,6 @@
 # MCPluginForX96Dbg
 
-A dual-architecture x96dbg/x64dbg plugin that exposes a lightweight JSON-RPC "Model Context Protocol" (MCP) bridge over TCP. The server allows automations to inspect and control the active debuggee without relying on the debugger UI.
+A dual-architecture x32dbg/x64dbg plugin that exposes a lightweight JSON-RPC "Model Context Protocol" (MCP) bridge over TCP. The server allows automations to inspect and control the active debuggee without relying on the debugger UI.
 
 ## Features
 
