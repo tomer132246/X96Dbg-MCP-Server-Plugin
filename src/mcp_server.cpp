@@ -1,4 +1,5 @@
 #include "mcp_server.h"
+#include "version.h"
 
 #include <algorithm>
 #include <array>
@@ -853,7 +854,7 @@ void McpServer::handleClient(SOCKET clientSocket)
             if(processRequest(request, response))
             {
                 if(!response.is_null())
-                    sendJson(clientSocket, response);
+                sendJson(clientSocket, response);
             }
             else if(!response.is_null())
             {
@@ -1113,12 +1114,12 @@ bool McpServer::processRequest(const json& request, json& response)
         }
         else
         {
-            response = {
-                {"jsonrpc", "2.0"},
-                {"id", id},
-                {"result", result}
-            };
-            LogInfoF("Request %s completed successfully", method.c_str());
+        response = {
+            {"jsonrpc", "2.0"},
+            {"id", id},
+            {"result", result}
+        };
+        LogInfoF("Request %s completed successfully", method.c_str());
         }
         return true;
     }
@@ -1133,14 +1134,14 @@ bool McpServer::processRequest(const json& request, json& response)
         }
         else
         {
-            response = {
-                {"jsonrpc", "2.0"},
-                {"id", id},
-                {"error", {
-                    {"code", -32000},
-                    {"message", sanitizeMessage(ex.what())}
-                }}
-            };
+        response = {
+            {"jsonrpc", "2.0"},
+            {"id", id},
+            {"error", {
+                {"code", -32000},
+                {"message", sanitizeMessage(ex.what())}
+            }}
+        };
         }
         return false;
     }
@@ -2485,7 +2486,7 @@ json McpServer::handlePatternScan(const json& params)
     {
         if(parseAddress(params.at("end"), endInclusive))
         {
-            endExclusive = endInclusive + 1;
+        endExclusive = endInclusive + 1;
             hasEnd = true;
         }
     }
@@ -2498,8 +2499,8 @@ json McpServer::handlePatternScan(const json& params)
         
         if(rawSize > 0)
         {
-            endExclusive = start + static_cast<duint>(rawSize);
-            endInclusive = endExclusive - 1;
+        endExclusive = start + static_cast<duint>(rawSize);
+        endInclusive = endExclusive - 1;
             hasEnd = true;
         }
     }
@@ -2662,7 +2663,7 @@ json McpServer::handleInitialize(const json& params)
         {"capabilities", capabilities},
         {"serverInfo", json::object({
             {"name", "MCPluginForX96Dbg"},
-            {"version", "0.1.0"}
+            {"version", PLUGIN_VERSION}
         })}
     });
 }
