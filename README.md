@@ -127,11 +127,9 @@ By default the script expects Release outputs in `build/win32` and `build/x64`. 
 
 > Note: The server speaks newline-delimited JSON-RPC. If you open the port in a web browser you’ll receive a plain-text help message rather than a JSON response.
 
-### MCP client configuration for VS Code
+### MCP client configuration for Cursor / VS Code
 
-Visual Studio Code can forward requests to the plugin's MCP server via the Model Context Protocol bridge. Create `.vscode/mcp.json` (or update your global `mcp.json`) with the following entry:
-
-NOTE: ${workspaceFolder} is not allowed since it running in py context. please replace it to a actual path.
+Cursor (or VS Code) can forward requests to the plugin's MCP server via the Model Context Protocol bridge. Create or update your global MCP configuration (e.g., `%APPDATA%/Cursor/User/globalStorage/mcp-servers.json`) with the following entry:
 
 ```json
 {
@@ -139,9 +137,9 @@ NOTE: ${workspaceFolder} is not allowed since it running in py context. please r
     "x96dbg-mcp": {
       "command": "python",
       "args": [
-        "${workspaceFolder}/tools/mcp_tcp_bridge.py",
+        "C:/Path/To/MCPluginForX96Dbg/tools/mcp_tcp_bridge.py",
         "--host",
-        "127.0.0.1",
+        "10.0.0.16", // or "127.0.0.1" if local
         "--port",
         "51337"
       ],
@@ -150,6 +148,10 @@ NOTE: ${workspaceFolder} is not allowed since it running in py context. please r
   }
 }
 ```
+
+**Note:**
+- Replace `C:/Path/To/...` with the actual absolute path to the bridge script.
+- The plugin supports remote queries! If x96dbg is running on a different machine (e.g., a VM at `10.0.0.16`), simply change the `--host` argument in this config to point to that IP address. Ensure the plugin itself is bound to `0.0.0.0` (the default) or that specific LAN IP by checking the log window in x96dbg.
 
 > 💡 Ensure Python 3.9+ is on your PATH. The helper script simply forwards newline-delimited JSON between VS Code and the plugin. Load the plugin in x96dbg before VS Code connects. The plugin binds to `0.0.0.0` by default; adjust the `--host` argument as needed, or run `mcp.host 127.0.0.1` inside x96dbg to restrict access to loopback only.
 

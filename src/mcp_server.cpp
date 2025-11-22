@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 #include <limits>
+#include <unordered_set>
 
 #include <ws2tcpip.h>
 
@@ -38,6 +39,134 @@ using json = nlohmann::json;
 namespace
 {
     constexpr size_t kMaxMemoryRead = 0x1000;
+
+    struct ResourceDefinition
+    {
+        const char* uri;
+        const char* name;
+        const char* description;
+        const char* mimeType;
+        const char* body;
+        const char* category;
+    };
+
+    constexpr ResourceDefinition kStaticResources[] = {
+        {
+            "mcp://mcplugin/resources/overview",
+            "MCPluginForX96Dbg overview",
+            "What this MCP server exposes and how to connect Cursor or VS Code.",
+            "text/markdown",
+            R"(## MCPluginForX96Dbg Overview
+
+This MCP server forwards a 32-bit x96dbg session to MCP-aware clients so they can call debugger tooling without leaving their editor.
+
+### Capabilities
+- Memory inspection (`readMemory`, `writeMemory`, `patternScan`)
+- Module, import, export, thread, and breakpoint enumeration
+- Page rights queries/updates and trace helpers
+- Register snapshots (`getRegisters`) and disassembly (`getDisassembly`)
+
+### Connecting from Cursor
+1. Load the MCPluginForX96Dbg plugin inside x96dbg.
+2. Start the MCP server (or use `tools/mcp_tcp_bridge.py`) on `host:port` that matches your `mcp.json`.
+3. Add the entry from `MCPluginForX96Dbg.json` (or `mcp.json`) to Cursor's MCP configuration.
+4. Launch Cursor's MCP panel and connect to `x96dbg-mcp`.
+
+### Notes
+- Only 32-bit sessions are supported today.
+- Most tools expect the debuggee to be paused/broken in x96dbg.
+- Any errors reported in Cursor are also logged in the x96dbg log window for troubleshooting.)",
+            "documentation"
+        },
+        {
+            "mcp://mcplugin/resources/tools",
+            "Available tools",
+            "Reference sheet for the debugger-oriented tools this server exposes.",
+            "text/markdown",
+            R"(## Tool Reference
+
+| Tool | Summary |
+| --- | --- |
+| readMemory | Dump bytes from the target address space (max 4 KB per call). |
+| writeMemory | Patch bytes with optional temporary page-rights escalation. |
+| listModules | Enumerate loaded modules with base, size, entry, and sections. |
+| getExports / getImports | Inspect module export and import tables. |
+| getDisassembly | Disassemble up to 64 instructions from an address. |
+| getRegisters | Snapshot general, debug, and flag registers. |
+| getThreads | Inspect debugger threads, priorities, wait reasons, and CIP. |
+| listBreakpoints / setBreakpoint / enableBreakpoint / disableBreakpoint / deleteBreakpoint | Manage all x96dbg breakpoint flavors. |
+| getPageRights / setPageRights / memIsCodePage | Query/modify memory protections. |
+| runTrace / getTraceRecord / memBpSize | Helpers for trace and memory-breakpoint diagnostics. |
+| patternScan | Binary pattern search with wildcard support. |
+| getPageRights | Inspect rights + guard bits for an address. |
+| ping | Lightweight health check. |
+
+Each tool maps directly to an x96dbg API call; detailed schemas are available through `tools/list`.)",
+            "reference"
+        }
+    };
+
+    const ResourceDefinition* findResourceDefinition(const std::string& uri)
+    {
+        for(const auto& resource : kStaticResources)
+        {
+            if(uri == resource.uri)
+                return &resource;
+        }
+        return nullptr;
+    }
+
+    const std::unordered_set<std::string> kDirectToolMethods = {
+        "readMemory",
+        "writeMemory",
+        "listModules",
+        "getExports",
+        "getImports",
+        "getDisassembly",
+        "getThreads",
+        "getPageRights",
+        "setPageRights",
+        "memIsCodePage",
+        "getTraceRecord",
+        "memBpSize",
+        "patternScan",
+        "listBreakpoints",
+        "deleteBreakpoint",
+        "disableBreakpoint",
+        "enableBreakpoint",
+        "setBreakpoint",
+        "getRegisters",
+        "runTrace",
+        "ping"
+    };
+
+    void ensureToolResponseFormat(const std::string& method, json& result)
+    {
+        if(!kDirectToolMethods.count(method))
+            return;
+
+        if(result.contains("content"))
+            return;
+
+        const json structuredCopy = result;
+
+        std::string summary = "Tool '" + method + "' completed successfully.";
+        json content = json::array();
+        content.push_back({
+            {"type", "text"},
+            {"text", summary}
+        });
+        content.push_back({
+            {"type", "text"},
+            {"text", structuredCopy.dump(2)}
+        });
+
+        result["content"] = content;
+        if(!result.contains("structured"))
+            result["structured"] = structuredCopy;
+
+        LogInfoF("Added MCP content envelope for method '%s'", method.c_str());
+    }
 
     std::string sanitizeMessage(const std::string& message)
     {
@@ -723,7 +852,8 @@ void McpServer::handleClient(SOCKET clientSocket)
             json response;
             if(processRequest(request, response))
             {
-                sendJson(clientSocket, response);
+                if(!response.is_null())
+                    sendJson(clientSocket, response);
             }
             else if(!response.is_null())
             {
@@ -940,6 +1070,16 @@ bool McpServer::processRequest(const json& request, json& response)
             LogInfo("Processing tools/call request");
             result = handleToolsCall(params);
         }
+        else if(method == "resources/list")
+        {
+            LogInfo("Processing resources/list request");
+            result = handleResourcesList(params);
+        }
+        else if(method == "resources/get")
+        {
+            LogInfo("Processing resources/get request");
+            result = handleResourcesGet(params);
+        }
         else if(method == "prompts/list")
         {
             LogInfo("Processing prompts/list request");
@@ -963,25 +1103,45 @@ bool McpServer::processRequest(const json& request, json& response)
             return false;
         }
 
-        response = {
-            {"jsonrpc", "2.0"},
-            {"id", id},
-            {"result", result}
-        };
-        LogInfoF("Request %s completed successfully", method.c_str());
+        ensureToolResponseFormat(method, result);
+
+        if(id.is_null())
+        {
+            // Notification, do not send response
+            LogInfoF("Notification %s processed, no response sent", method.c_str());
+            response = json();
+        }
+        else
+        {
+            response = {
+                {"jsonrpc", "2.0"},
+                {"id", id},
+                {"result", result}
+            };
+            LogInfoF("Request %s completed successfully", method.c_str());
+        }
         return true;
     }
     catch(const std::exception& ex)
     {
         LogErrorF("Request %s failed: %s", method.c_str(), sanitizeMessage(ex.what()).c_str());
-        response = {
-            {"jsonrpc", "2.0"},
-            {"id", id},
-            {"error", {
-                {"code", -32000},
-                {"message", sanitizeMessage(ex.what())}
-            }}
-        };
+        
+        if(id.is_null())
+        {
+             LogWarningF("Notification %s failed, error suppressed", method.c_str());
+             response = json();
+        }
+        else
+        {
+            response = {
+                {"jsonrpc", "2.0"},
+                {"id", id},
+                {"error", {
+                    {"code", -32000},
+                    {"message", sanitizeMessage(ex.what())}
+                }}
+            };
+        }
         return false;
     }
 }
@@ -2307,50 +2467,61 @@ json McpServer::handlePatternScan(const json& params)
         throw std::runtime_error("Pattern length must be greater than zero");
 
     duint start = 0;
+    bool hasStart = false;
     if(params.contains("start"))
     {
-        if(!parseAddress(params.at("start"), start))
-            throw std::runtime_error("Invalid start parameter");
+        if(parseAddress(params.at("start"), start)) hasStart = true;
     }
     else if(params.contains("address"))
     {
-        if(!parseAddress(params.at("address"), start))
-            throw std::runtime_error("Invalid address parameter");
-    }
-    else
-    {
-        throw std::runtime_error("Missing start or address parameter");
+        if(parseAddress(params.at("address"), start)) hasStart = true;
     }
 
     duint endInclusive = 0;
     duint endExclusive = 0;
+    bool hasEnd = false;
 
     if(params.contains("end"))
     {
-        if(!parseAddress(params.at("end"), endInclusive))
-            throw std::runtime_error("Invalid end parameter");
-        if(endInclusive < start)
-            throw std::runtime_error("End address must be greater than or equal to start address");
-        endExclusive = endInclusive + 1;
+        if(parseAddress(params.at("end"), endInclusive))
+        {
+            endExclusive = endInclusive + 1;
+            hasEnd = true;
+        }
     }
     else if(params.contains("size"))
     {
         const auto sizeValue = params.at("size");
-        if(!sizeValue.is_number_unsigned())
-            throw std::runtime_error("Size parameter must be an unsigned integer");
-        const unsigned long long rawSize = sizeValue.get<unsigned long long>();
-        if(rawSize == 0)
-            throw std::runtime_error("Size parameter must be greater than zero");
-        if(rawSize > std::numeric_limits<duint>::max())
-            throw std::runtime_error("Size parameter exceeds address space");
-        if(rawSize > std::numeric_limits<duint>::max() - start)
-            throw std::runtime_error("Start + size would overflow address space");
-        endExclusive = start + static_cast<duint>(rawSize);
-        endInclusive = endExclusive - 1;
+        unsigned long long rawSize = 0;
+        if(sizeValue.is_number_unsigned())
+            rawSize = sizeValue.get<unsigned long long>();
+        
+        if(rawSize > 0)
+        {
+            endExclusive = start + static_cast<duint>(rawSize);
+            endInclusive = endExclusive - 1;
+            hasEnd = true;
+        }
     }
-    else
+
+    if(!hasStart || !hasEnd)
     {
-        throw std::runtime_error("Missing end or size parameter");
+        // Default to main module if no range specified
+        BridgeList<Script::Module::ModuleInfo> moduleList;
+        if(Script::Module::GetList(&moduleList) && moduleList.Count() > 0)
+        {
+            const auto* mainMod = &moduleList.Data()[0];
+            if(!hasStart) start = mainMod->base;
+            if(!hasEnd)
+            {
+                endExclusive = mainMod->base + mainMod->size;
+                endInclusive = endExclusive - 1;
+            }
+        }
+        else if(!hasStart && !hasEnd)
+        {
+             throw std::runtime_error("Missing start/end/size parameters and cannot determine main module default range");
+        }
     }
 
     if(endExclusive <= start)
@@ -2461,6 +2632,13 @@ json McpServer::handleInitialize(const json& params)
     std::string clientName = client.value("name", std::string("unknown"));
     LogInfoF("Client '%s' requested initialize", clientName.c_str());
 
+    constexpr const char* kDefaultProtocolVersion = "1.0";
+    const std::string requestedProtocolVersion = params.value("protocolVersion", std::string(kDefaultProtocolVersion));
+    const std::string negotiatedProtocolVersion = requestedProtocolVersion.empty() ? std::string(kDefaultProtocolVersion) : requestedProtocolVersion;
+
+    if(negotiatedProtocolVersion != kDefaultProtocolVersion)
+        LogInfoF("Negotiated protocol version '%s' (default '%s')", negotiatedProtocolVersion.c_str(), kDefaultProtocolVersion);
+
     json capabilities = json::object({
         {"logging", json::object({
             {"setLevel", true}
@@ -2474,13 +2652,13 @@ json McpServer::handleInitialize(const json& params)
             {"call", true}
         })},
         {"resources", json::object({
-            {"list", false},
-            {"get", false}
+            {"list", true},
+            {"get", true}
         })}
     });
 
     return json::object({
-        {"protocolVersion", "1.0"},
+        {"protocolVersion", negotiatedProtocolVersion},
         {"capabilities", capabilities},
         {"serverInfo", json::object({
             {"name", "MCPluginForX96Dbg"},
@@ -2526,23 +2704,13 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address", "size"})}
-        })},
-        {"outputSchema", json::object({
-            {"type", "object"},
-            {"properties", json::object({
-                {"address", json::object({{"type", "string"}})},
-                {"size", json::object({{"type", "integer"}})},
-                {"data", json::object({{"type", "string"}})},
-                {"valueHex", json::object({{"type", "string"}})}
-            })}
         })}
     });
 
     tools.push_back({
         {"name", "listModules"},
         {"description", "Enumerate all loaded modules."},
-        {"inputSchema", json::object({{"type", "object"}})},
-        {"outputSchema", json::object({{"type", "object"}})}
+        {"inputSchema", json::object({{"type", "object"}})}
     });
 
     tools.push_back({
@@ -2557,8 +2725,7 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"module"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2573,8 +2740,7 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"module"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2595,15 +2761,13 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
         {"name", "getThreads"},
         {"description", "Enumerate debugger threads and their state."},
-        {"inputSchema", json::object({{"type", "object"}})},
-        {"outputSchema", json::object({{"type", "object"}})}
+        {"inputSchema", json::object({{"type", "object"}})}
     });
 
     tools.push_back({
@@ -2622,8 +2786,7 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2647,8 +2810,7 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address", "protect", "size"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2667,8 +2829,7 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2683,8 +2844,7 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2699,8 +2859,7 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2718,8 +2877,7 @@ json McpServer::handleToolsList()
                     {"description", "When false, omits conditional/script fields for brevity."}
                 })}
             })}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2742,8 +2900,7 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2762,8 +2919,7 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2782,8 +2938,7 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2798,15 +2953,13 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address"})}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
         {"name", "getRegisters"},
         {"description", "Get the current register state."},
-        {"inputSchema", json::object({{"type", "object"}})},
-        {"outputSchema", json::object({{"type", "object"}})}
+        {"inputSchema", json::object({{"type", "object"}})}
     });
 
     tools.push_back({
@@ -2826,8 +2979,7 @@ json McpServer::handleToolsList()
                     {"description", "Number of steps to trace."}
                 })}
             })}
-        })},
-        {"outputSchema", json::object({{"type", "object"}})}
+        })}
     });
 
     tools.push_back({
@@ -2855,17 +3007,6 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"address", "data"})}
-        })},
-        {"outputSchema", json::object({
-            {"type", "object"},
-            {"properties", json::object({
-                {"address", json::object({{"type", "string"}})},
-                {"force", json::object({{"type", "boolean"}})},
-                {"bytesWritten", json::object({{"type", "integer"}})},
-                {"pageProtectBefore", json::object({{"type", "string"}})},
-                {"pageProtectAfter", json::object({{"type", "string"}})},
-                {"protectionRestored", json::object({{"type", "boolean"}})}
-            })}
         })}
     });
 
@@ -2903,27 +3044,13 @@ json McpServer::handleToolsList()
                 })}
             })},
             {"required", json::array({"pattern"})}
-        })},
-        {"outputSchema", json::object({
-            {"type", "object"},
-            {"properties", json::object({
-                {"pattern", json::object({{"type", "string"}})},
-                {"patternLength", json::object({{"type", "integer"}})},
-                {"start", json::object({{"type", "string"}})},
-                {"end", json::object({{"type", "string"}})},
-                {"scannedBytes", json::object({{"type", "integer"}})},
-                {"maxResults", json::object({{"type", "integer"}})},
-                {"matchCount", json::object({{"type", "integer"}})},
-                {"matches", json::object({{"type", "array"}})}
-            })}
         })}
     });
 
     tools.push_back({
         {"name", "ping"},
         {"description", "Health check."},
-        {"inputSchema", json::object({{"type", "object"}})},
-        {"outputSchema", json::object({{"type", "object"}})}
+        {"inputSchema", json::object({{"type", "object"}})}
     });
 
     return json::object({
@@ -2935,6 +3062,69 @@ json McpServer::handlePromptsList()
 {
     return json::object({
         {"prompts", json::array()}
+    });
+}
+
+json McpServer::handleResourcesList(const json& params)
+{
+    (void)params;
+
+    json resources = json::array();
+    for(const auto& resource : kStaticResources)
+    {
+        json metadata = json::object();
+        if(resource.category && *resource.category)
+            metadata["category"] = resource.category;
+        if(resource.body)
+            metadata["length"] = static_cast<int>(std::strlen(resource.body));
+
+        resources.push_back(json::object({
+            {"uri", resource.uri},
+            {"name", resource.name},
+            {"description", resource.description},
+            {"mimeType", resource.mimeType},
+            {"metadata", metadata}
+        }));
+    }
+
+    return json::object({{"resources", resources}});
+}
+
+json McpServer::handleResourcesGet(const json& params)
+{
+    if(!params.contains("uri") || !params.at("uri").is_string())
+        throw std::runtime_error("resources/get missing uri");
+
+    const std::string uri = params.at("uri").get<std::string>();
+    const ResourceDefinition* resource = findResourceDefinition(uri);
+    if(!resource)
+    {
+        LogWarningF("resources/get unknown uri: %s", uri.c_str());
+        throw std::runtime_error("Resource not found");
+    }
+
+    json content = json::array();
+    if(resource->body && *resource->body)
+    {
+        content.push_back(json::object({
+            {"type", "text"},
+            {"text", resource->body}
+        }));
+    }
+
+    if(content.empty())
+    {
+        content.push_back(json::object({
+            {"type", "text"},
+            {"text", std::string("No data available for ") + resource->name}
+        }));
+    }
+
+    return json::object({
+        {"uri", resource->uri},
+        {"name", resource->name},
+        {"mimeType", resource->mimeType},
+        {"content", content}
     });
 }
 
@@ -3405,30 +3595,35 @@ json McpServer::handleToolsCall(const json& params)
     if(payload.is_null())
         throw std::runtime_error("tools/call received unknown tool");
 
-    json content = json::array({
-        json::object({
-            {"type", "json"},
-            {"json", payload}
-        })
-    });
+    json content = json::array();
 
-    if(!summary.empty())
-    {
-        content.push_back({
-            {"type", "text"},
-            {"text", summary}
-        });
-    }
-
-    for(const auto& text : extraText)
-    {
-        content.push_back({
+    auto appendText = [&content](const std::string& text) {
+        if(text.empty())
+            return;
+        content.push_back(json::object({
             {"type", "text"},
             {"text", text}
-        });
-    }
+        }));
+    };
 
-    return json::object({{"content", content}});
+    appendText(summary);
+    for(const auto& text : extraText)
+        appendText(text);
+
+    const std::string payloadText = payload.dump(2);
+    appendText(payloadText);
+
+    if(content.empty())
+        appendText("Tool executed without additional output.");
+
+    json result = json::object({
+        {"content", content}
+    });
+
+    if(!payload.is_null())
+        result["structured"] = payload;
+
+    return result;
 }
 
 bool McpServer::parseAddress(const json& value, duint& address)

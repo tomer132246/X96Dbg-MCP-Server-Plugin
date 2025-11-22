@@ -59,6 +59,8 @@ private:
     nlohmann::json handleToolsList();
     nlohmann::json handlePromptsList();
     nlohmann::json handleToolsCall(const nlohmann::json& params);
+    nlohmann::json handleResourcesList(const nlohmann::json& params);
+    nlohmann::json handleResourcesGet(const nlohmann::json& params);
 
     static bool parseAddress(const nlohmann::json& value, duint& address);
     static std::string formatAddress(duint address);
