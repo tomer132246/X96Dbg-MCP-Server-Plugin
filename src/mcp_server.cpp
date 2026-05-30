@@ -590,7 +590,7 @@ Each tool maps directly to an x96dbg API call; detailed schemas are available th
 }
 
 McpServer::McpServer()
-    : running_(false), listenSocket_(INVALID_SOCKET), port_(0), activeClient_(INVALID_SOCKET), wsaInitialized_(false), host_("127.0.0.1")
+    : running_(false), listenSocket_(INVALID_SOCKET), port_(0), wsaInitialized_(false), host_("127.0.0.1")
 {
 }
 
@@ -642,14 +642,12 @@ void McpServer::stop()
         running_ = false;
     }
 
-    SOCKET clientToClose = INVALID_SOCKET;
+    // Unblock every connected client so their handler threads can exit.
     {
         std::lock_guard<std::mutex> lock(clientMutex_);
-        clientToClose = activeClient_;
+        for(SOCKET client : activeClients_)
+            shutdown(client, SD_BOTH);
     }
-
-    if(clientToClose != INVALID_SOCKET)
-        shutdown(clientToClose, SD_BOTH);
 
     if(listenSocket_ != INVALID_SOCKET)
     {
@@ -659,6 +657,12 @@ void McpServer::stop()
 
     if(worker_.joinable())
         worker_.join();
+
+    // Wait for all client handler threads to finish and deregister themselves.
+    {
+        std::unique_lock<std::mutex> lock(clientMutex_);
+        clientsCv_.wait(lock, [this] { return activeClients_.empty(); });
+    }
 
     if(wsaInitialized_)
     {
@@ -776,32 +780,29 @@ void McpServer::serverLoop()
         else
             LogInfo("Accepted connection from unknown address");
 
-        handleClient(clientSocket);
-        closesocket(clientSocket);
+        // Track the connection, then service it on a dedicated thread so that
+        // multiple agents can stay connected and issue requests concurrently.
+        {
+            std::lock_guard<std::mutex> lock(clientMutex_);
+            activeClients_.insert(clientSocket);
+        }
+
+        std::thread([this, clientSocket]() {
+            handleClient(clientSocket);
+            closesocket(clientSocket);
+            {
+                std::lock_guard<std::mutex> lock(clientMutex_);
+                activeClients_.erase(clientSocket);
+            }
+            clientsCv_.notify_all();
+        }).detach();
     }
 }
 
 void McpServer::handleClient(SOCKET clientSocket)
 {
-    struct ActiveClientScope
-    {
-        McpServer* server;
-        SOCKET sock;
-        ~ActiveClientScope()
-        {
-            if(!server)
-                return;
-            std::lock_guard<std::mutex> lock(server->clientMutex_);
-            if(server->activeClient_ == sock)
-                server->activeClient_ = INVALID_SOCKET;
-        }
-    } scope{this, clientSocket};
-
-    {
-        std::lock_guard<std::mutex> lock(clientMutex_);
-        activeClient_ = clientSocket;
-    }
-
+    // Registration in activeClients_ and socket cleanup are owned by the
+    // per-connection thread spawned in serverLoop().
     LogInfo("Client connected");
     std::string buffer;
     buffer.reserve(4096);
@@ -950,6 +951,12 @@ bool McpServer::processRequest(const json& request, json& response)
 
     try
     {
+        // The x64dbg SDK operates on a single shared debuggee and is not
+        // thread-safe, so requests from concurrent clients are executed one at
+        // a time. Connections remain concurrent; only the debugger work below
+        // is serialized.
+        std::lock_guard<std::mutex> requestLock(requestMutex_);
+
         json result;
         if(method == "initialize")
         {

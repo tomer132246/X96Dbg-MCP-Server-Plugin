@@ -1,9 +1,11 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 #include <winsock2.h>
 
@@ -79,7 +81,9 @@ private:
     unsigned short port_;
     std::mutex stateMutex_;
     std::mutex clientMutex_;
-    SOCKET activeClient_;
+    std::condition_variable clientsCv_;
+    std::unordered_set<SOCKET> activeClients_;
+    std::mutex requestMutex_;
     bool wsaInitialized_;
     std::string host_;
 };
